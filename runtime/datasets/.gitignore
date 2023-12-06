@@ -1,2 +1,3 @@
-imgnet/**
+__pycache__/**
 coco/**
+imgnet/**

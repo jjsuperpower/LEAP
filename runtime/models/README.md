@@ -1,0 +1,2 @@
+# Models
+This directory contains the models used by the runtime. Any models added must be compiled to match the DPU architecture of the loaded overlay. These models can be found from [Xilinx AI Model Zoo (v2.5.0)](https://github.com/Xilinx/Vitis-AI/tree/v2.5/model_zoo). All models in this folder must contain the `.xmodel` extension.

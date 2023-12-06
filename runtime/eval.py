@@ -2,7 +2,7 @@
 import sys
 from pathlib import Path
 sys.path.append('/home/xilinx/jupyter_notebooks/')
-from leap.datasets import BaseDataset, BaseResults, ImgNetDataset, ImgNetResults, CocoDataset, CocoResults
+from datasets import BaseDataset, BaseResults, ImgNetDataset, ImgNetResults, CocoDataset, CocoResults
 
 RESULTS_DIR = Path('leap/results')
 

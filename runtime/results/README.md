@@ -1,0 +1,2 @@
+# Results
+When benchmarking, the raw results (predictions) are stored in this directory. The are stored in `.json` files. The specific format of the files varies between datasets. To get accuracy and mAP from these use the `leap/runtime/eval.py` script.
