@@ -9,15 +9,15 @@ from datasets import ImgNetDataset, ImgNetResults, CocoDataset, CocoResults
 
       
 def setup_leap(model, overlay=None, **kwargs):
-    if overlay is None:
-        overlay = 'overlays/leap_b4096_v5.bit'
-    if model is 'yolov3':
-        class_labels = 'datasets/coco_classes.txt'
-        model_file = 'models/yolov3_coco_416_tf2.xmodel'
+    if overlay == None:
+        overlay = os.path.abspath('overlays/leap_b4096_v5.bit')
+    if model == 'yolov3':
+        class_labels = os.path.abspath('datasets/coco_classes.txt')
+        model_file = os.path.abspath('models/yolov3_coco_416_tf2.xmodel')
         model_class = YOLOv3
-    elif model is 'resnet50':
-        model_file = 'pynq-dpu/dpu_resnet50.xmodel'
-        class_labels = 'imgnet_classes.txt'
+    elif model == 'resnet50':
+        model_file = os.path.abspath('models/dpu_resnet50.xmodel')
+        class_labels = os.path.abspath('datasets/imgnet_classes.txt')
         model_class = Resnet50
     else:
         raise ValueError(f'Model: {model} not found')
@@ -30,7 +30,7 @@ def transform(img:np.ndarray):
         img = img // 8
         return img
 
-def benchmark_resnet50(leap: Leap, save_dir='/home/xilinx/jupyter_notebooks/leap/results/'):
+def benchmark_resnet50(leap: Leap, save_dir='results/'):
     # test on dark image with hist eq
     imgnet = ImgNetDataset(transform=transform)
     results = ImgNetResults(imgnet)
@@ -55,7 +55,7 @@ def benchmark_resnet50(leap: Leap, save_dir='/home/xilinx/jupyter_notebooks/leap
     leap.eval(imgnet, results, False)
     
     
-def benchmark_yolov3(leap: Leap, save_dir='/home/xilinx/jupyter_notebooks/leap/results/'):
+def benchmark_yolov3(leap: Leap, save_dir='results/'):
     
     # test on dark image with hist eq
     coco = CocoDataset(transform=transform)
@@ -101,6 +101,8 @@ if __name__ == '__main__':
         parser.add_argument('--max_queue_size', type=int, default=4, help='Maximum queue size for multiprocessing')
         parser.add_argument('--save_dir', type=str, default='/home/xilinx/jupyter_notebooks/leap/results/', help='Directory to save results for benchmarking')
         parser.add_argument('--benchmark', action='store_true', help='Runs benchmark instead of live demo')
+        parser.add_argument('--disable_dpu', action='store_true', help='Disables DPU and will not run model')
+        parser.add_argument('--disable_ie', action='store_true', help='Disables image enhancement')
         return parser.parse_args()
     
     args = parse_args()
@@ -111,10 +113,15 @@ if __name__ == '__main__':
     
     leap = setup_leap(args.model, args.overlay, frame_size=args.frame_size, fps=args.fps, max_queue_size=args.max_queue_size)
     
+    if args.disable_dpu:
+        leap.disable_dpu()
+    if args.disable_ie:
+        leap.disable_ie()
+    
     if args.benchmark:
-        if args.model is 'resnet50':
+        if args.model == 'resnet50':
             benchmark_resnet50(leap, args.save_dir)
-        elif args.model is 'yolov3':
+        elif args.model == 'yolov3':
             benchmark_yolov3(leap, args.save_dir)
     else:
         leap.run(args.method)

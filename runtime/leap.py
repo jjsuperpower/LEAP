@@ -45,6 +45,18 @@ class Leap():
         self.fps = fps
         self.max_queue_size = max_queue_size
         
+        self.ie_enabled = True
+        self.dpu_enabled = True
+        
+    def enable_ie(self):
+        self.ie_enabled = True
+    def disable_ie(self):
+        self.ie_enabled = False
+    def enable_dpu(self):
+        self.dpu_enabled = True
+    def disable_dpu(self):
+        self.dpu_enabled = False
+        
     def config(self):
         self.hdmi.config(mode='both', width=self.frame_size[0], height=self.frame_size[1], fps=self.fps)
         width, height = self.hdmi.get_rx_frame_size()
@@ -60,27 +72,35 @@ class Leap():
     
     @staticmethod
     @inf_process
-    def _preprocess(hist_eq:HistEq, model:BaseModel, dpu_queue_out:queue.Queue, osd_img_queue_out:queue.Queue):
-        img = hist_eq.recv_img()
+    def _preprocess(hist_eq:HistEq, hdmi:HDMI, model:BaseModel, dpu_queue_out:queue.Queue, osd_img_queue_out:queue.Queue, image_ie_enabled=True, dpu_enabled=True):
+        if image_ie_enabled:
+            img = hist_eq.recv_img()
+        else:
+            img = hdmi.readframe()
         osd_img_queue_out.put(img)
-        img = model.preprocess(img)
+        if dpu_enabled:
+            img = model.preprocess(img)
         dpu_queue_out.put(img)
                     
     @staticmethod
     @inf_process
-    def _dpu(model:BaseModel, dpu_queue_in:queue.Queue, post_proc_queue_out:queue.Queue):
+    def _dpu(model:BaseModel, dpu_queue_in:queue.Queue, post_proc_queue_out:queue.Queue, dpu_enabled=True):
         img = dpu_queue_in.get()
-        pred_raw = model.forward(img)
+        if dpu_enabled:
+            pred_raw = model.forward(img)
         post_proc_queue_out.put(pred_raw)
            
      
     @staticmethod
     @inf_process
-    def _postprocess(model:BaseModel, post_proc_queue_in:queue.Queue, osd_img_queue_in:queue.Queue, output_queue_out:queue.Queue):
+    def _postprocess(model:BaseModel, post_proc_queue_in:queue.Queue, osd_img_queue_in:queue.Queue, output_queue_out:queue.Queue, dpu_enabled=True):
         img = osd_img_queue_in.get()
         pred_raw = post_proc_queue_in.get()
-        pred = model.postprocess(pred_raw)
-        out_img = model.osd(img, pred)
+        if dpu_enabled:
+            pred = model.postprocess(pred_raw)
+            out_img = model.osd(img, pred)
+        else:
+            out_img = img
         output_queue_out.put(out_img)
            
     @staticmethod
@@ -101,9 +121,9 @@ class Leap():
         self.stop_event = Event()
         
         # first argument goes to the wrapper functions
-        p1 = Process(target=Leap._preprocess, args=(self.stop_event, self.hist_eq, self.model, self.dpu_queue, self.osd_img_queue))
-        p2 = Process(target=Leap._dpu, args=(self.stop_event, self.model, self.dpu_queue, self.post_proc_queue))
-        p3 = Process(target=Leap._postprocess, args=(self.stop_event, self.model, self.post_proc_queue, self.osd_img_queue, self.output_queue))
+        p1 = Process(target=Leap._preprocess, args=(self.stop_event, self.hist_eq, self.hdmi, self.model, self.dpu_queue, self.osd_img_queue, self.ie_enabled, self.dpu_enabled))
+        p2 = Process(target=Leap._dpu, args=(self.stop_event, self.model, self.dpu_queue, self.post_proc_queue, self.dpu_enabled))
+        p3 = Process(target=Leap._postprocess, args=(self.stop_event, self.model, self.post_proc_queue, self.osd_img_queue, self.output_queue, self.dpu_enabled))
         p4 = Process(target=Leap._output, args=(self.stop_event, self.hdmi, self.output_queue, frame_count))
         
         procs = [p1, p2, p3, p4]
@@ -156,20 +176,25 @@ class Leap():
             #     hist_eq_img = self.hist_eq.recv_img()       # get next frame from hdmi
             # else:
             #     hist_eq_img = self.hdmi.readframe()
-            
-            hist_eq_img = self.hist_eq.recv_img()
+            if self.image_ie_enabled:
+                hist_eq_img = self.hist_eq.recv_img()
+            else:
+                hist_eq_img = self.hdmi.readframe()
             frame_read_time = time.perf_counter()
             
             prepped_img = self.model.preprocess(hist_eq_img)    # preprocess frame
             prep_time = time.perf_counter()
             
-            pred_raw = self.model.forward(prepped_img)  # run inference
+            if self.dpu_enabled:
+                pred_raw = self.model.forward(prepped_img)  # run inference
             dpu_time = time.perf_counter()
             
-            pred = self.model.postprocess(pred_raw)
+            if self.dpu_enabled:
+                pred = self.model.postprocess(pred_raw)
             post_time = time.perf_counter()
             
-            out_img = self.model.osd(hist_eq_img, pred)
+            if self.dpu_enabled:
+                out_img = self.model.osd(hist_eq_img, pred)
             osd_time = time.perf_counter()
             
             self.hdmi.sendframe(out_img)
@@ -223,5 +248,7 @@ class Leap():
             results.add(res, img_id)
             
             print(f'Processed {((i+1)/total_imgs)*100:.1f}%')
+            
+        self.shutdown()
 
         
