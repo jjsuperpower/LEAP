@@ -3,7 +3,6 @@ from pynq_dpu import DpuOverlay
 import numpy as np
 
 import cv2 as cv
-import time
 
 class BaseModel():
     IMG_SIZE = (None, None)
@@ -13,7 +12,7 @@ class BaseModel():
         self.model_path = model_path
         
         self.overlay.load_model(self.model_path)
-        # self.overlay.copy_xclbin()
+        self.overlay.copy_xclbin()
         self.dpu = overlay.runner
        
         self.alloc_input_buffer()

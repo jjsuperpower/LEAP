@@ -1,7 +1,6 @@
 import pynq
 from pynq_dpu import DpuOverlay
 
-
 import time
 import sys
 import numpy as np
