@@ -158,58 +158,74 @@ class Leap():
             p.terminate()       # some will hang on join() if they are waiting for a queue
             p.join()
 
+    @staticmethod
+    @inf_process
+    def seq_proc(hdmi, hist_eq, model, image_ie_enabled=True, dpu_enabled=True):
         
+        # bipass_he = False
+        start = time.perf_counter()
+
+        #bipass preprocessing every 20 frames
+        # if i % 20 == 0:
+        #     bipass_he = not bipass_he
+    
+        # if not bipass_he:
+        #     hist_eq_img = self.hist_eq.recv_img()       # get next frame from hdmi
+        # else:
+        #     hist_eq_img = self.hdmi.readframe()
+        if image_ie_enabled:
+            hist_eq_img = hist_eq.recv_img()
+        else:
+            hist_eq_img = hdmi.readframe()
+        frame_read_time = time.perf_counter()
+        
+        prepped_img = model.preprocess(hist_eq_img)    # preprocess frame
+        prep_time = time.perf_counter()
+        
+        if dpu_enabled:
+            pred_raw = model.forward(prepped_img)  # run inference
+        dpu_time = time.perf_counter()
+        
+        if dpu_enabled:
+            pred = model.postprocess(pred_raw)
+        post_time = time.perf_counter()
+        
+        if dpu_enabled:
+            out_img = model.osd(hist_eq_img, pred)
+        osd_time = time.perf_counter()
+        
+        hdmi.sendframe(out_img)
+        output_time = time.perf_counter()
+            
+        print(f'read time: {(frame_read_time - start)*1000:.2f}ms | '
+                f'prep time: {(prep_time - frame_read_time)*1000:.2f}ms | '
+                f'dpu time: {(dpu_time - prep_time)*1000:.2f}ms | '
+                f'post time: {(post_time - dpu_time)*1000:.2f}ms | '
+                f'osd time: {(osd_time - post_time)*1000:.2f}ms | '
+                f'output time: {(output_time - osd_time)*1000:.2f}ms | '
+                f'total time: {(output_time - start)*1000:.2f}ms',)
+            
+            
     def run_seq(self):
+        self.stop_event = Event()
+        seq_proc = Process(target=Leap.seq_proc, args=(self.stop_event, self.hdmi, self.hist_eq, self.model, self.ie_enabled, self.dpu_enabled))
+        
         self.hdmi.start()
         self.hdmi.pipe_out(self.hist_eq.pipe_in) # connect hdmi input to hist_eq
         
-        i = 1
-        # bipass_he = False
-        while True:
-            start = time.perf_counter()
-
-            #bipass preprocessing every 20 frames
-            # if i % 20 == 0:
-            #     bipass_he = not bipass_he
         
-            # if not bipass_he:
-            #     hist_eq_img = self.hist_eq.recv_img()       # get next frame from hdmi
-            # else:
-            #     hist_eq_img = self.hdmi.readframe()
-            if self.image_ie_enabled:
-                hist_eq_img = self.hist_eq.recv_img()
-            else:
-                hist_eq_img = self.hdmi.readframe()
-            frame_read_time = time.perf_counter()
-            
-            prepped_img = self.model.preprocess(hist_eq_img)    # preprocess frame
-            prep_time = time.perf_counter()
-            
-            if self.dpu_enabled:
-                pred_raw = self.model.forward(prepped_img)  # run inference
-            dpu_time = time.perf_counter()
-            
-            if self.dpu_enabled:
-                pred = self.model.postprocess(pred_raw)
-            post_time = time.perf_counter()
-            
-            if self.dpu_enabled:
-                out_img = self.model.osd(hist_eq_img, pred)
-            osd_time = time.perf_counter()
-            
-            self.hdmi.sendframe(out_img)
-            output_time = time.perf_counter()
-            
-            print(f'Frame {i} | '
-                  f'read time: {(frame_read_time - start)*1000:.2f}ms | '
-                  f'prep time: {(prep_time - frame_read_time)*1000:.2f}ms | '
-                  f'dpu time: {(dpu_time - prep_time)*1000:.2f}ms | '
-                  f'post time: {(post_time - dpu_time)*1000:.2f}ms | '
-                  f'osd time: {(osd_time - post_time)*1000:.2f}ms | '
-                  f'output time: {(output_time - osd_time)*1000:.2f}ms | '
-                  f'total time: {(output_time - start)*1000:.2f}ms',)
-            
-            i += 1
+        try: 
+            start = time.perf_counter()
+            while True:
+                if frame_count.value > 60:
+                    frame_count.value = 0
+                    start = time.perf_counter()
+
+                time.sleep(1)
+                print(f'Average FPS: {frame_count.value/(time.perf_counter() - start):.2f}')
+                
+        except KeyboardInterrupt:
+            print('Stopping')
             
     def run(self, method:str='mp'):
         if method == 'mp':
