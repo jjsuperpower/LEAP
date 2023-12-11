@@ -8,6 +8,7 @@ from multiprocessing import Process, Event, Queue, Value
 import queue
 import signal
 import cv2 as cv
+import os
 
 # from models import Resnet50, YOLOv3, BaseModel
 from hdmi import HDMI
@@ -35,9 +36,9 @@ def inf_process(func):
 
 
 class Leap():
-    def __init__(self, bitstream_file, model_class, model_file, class_file, frame_size=(1920, 1080), fps=60, max_queue_size=4):
+    def __init__(self, bitstream_file:str, model:BaseModel, model_file:str, class_file:str, frame_size=(1920, 1080), fps=60, max_queue_size=4):
         self.overlay = DpuOverlay(bitstream_file)
-        self.model = model_class(self.overlay, model_file, class_file)
+        self.model = model(self.overlay, model_file, class_file)
         self.hist_eq = HistEq(self.overlay)
         self.hdmi = HDMI(self.overlay)
         
@@ -113,21 +114,22 @@ class Leap():
     def run_mp(self):
         
         frame_count = Value('i', 0)
+        stop_event = Event()
         
         self.dpu_queue = Queue(maxsize=self.max_queue_size)     # hist_eq -> prep -> dpu_queue -> dpu
         self.post_proc_queue = Queue(maxsize=self.max_queue_size)    # dpu -> pred_queue -> post processing -> osd
         self.osd_img_queue = Queue(maxsize=self.max_queue_size)      # hist_eq -> post processing -> osd
         self.output_queue = Queue(maxsize=self.max_queue_size)       # post processing -> output_queue -> hdmi out
-        self.stop_event = Event()
+        
         
         # first argument goes to the wrapper functions
-        p1 = Process(target=Leap._preprocess, args=(self.stop_event, self.hist_eq, self.hdmi, self.model, self.dpu_queue, self.osd_img_queue, self.ie_enabled, self.dpu_enabled))
-        p2 = Process(target=Leap._dpu, args=(self.stop_event, self.model, self.dpu_queue, self.post_proc_queue, self.dpu_enabled))
-        p3 = Process(target=Leap._postprocess, args=(self.stop_event, self.model, self.post_proc_queue, self.osd_img_queue, self.output_queue, self.dpu_enabled))
-        p4 = Process(target=Leap._output, args=(self.stop_event, self.hdmi, self.output_queue, frame_count))
+        p1 = Process(target=Leap._preprocess, args=(stop_event, self.hist_eq, self.hdmi, self.model, self.dpu_queue, self.osd_img_queue, self.ie_enabled, self.dpu_enabled))
+        p2 = Process(target=Leap._dpu, args=(stop_event, self.model, self.dpu_queue, self.post_proc_queue, self.dpu_enabled))
+        p3 = Process(target=Leap._postprocess, args=(stop_event, self.model, self.post_proc_queue, self.osd_img_queue, self.output_queue, self.dpu_enabled))
+        p4 = Process(target=Leap._output, args=(stop_event, self.hdmi, self.output_queue, frame_count))
         
         procs = [p1, p2, p3, p4]
-        self.stop_event.clear()
+        stop_event.clear()
         
         self.hdmi.start()
         self.hdmi.pipe_out(self.hist_eq.pipe_in) # connect hdmi input to hist_eq
@@ -148,7 +150,7 @@ class Leap():
                 
         except KeyboardInterrupt:
             print('Stopping')
-            self.stop_event.set()
+            stop_event.set()
             self.dpu_queue.close()
             self.post_proc_queue.close()
             self.osd_img_queue.close()
@@ -160,19 +162,10 @@ class Leap():
 
     @staticmethod
     @inf_process
-    def seq_proc(hdmi, hist_eq, model, image_ie_enabled=True, dpu_enabled=True):
+    def seq_proc(hdmi, hist_eq, model, frame_count, image_ie_enabled=True, dpu_enabled=True):
         
-        # bipass_he = False
         start = time.perf_counter()
 
-        #bipass preprocessing every 20 frames
-        # if i % 20 == 0:
-        #     bipass_he = not bipass_he
-    
-        # if not bipass_he:
-        #     hist_eq_img = self.hist_eq.recv_img()       # get next frame from hdmi
-        # else:
-        #     hist_eq_img = self.hdmi.readframe()
         if image_ie_enabled:
             hist_eq_img = hist_eq.recv_img()
         else:
@@ -196,8 +189,11 @@ class Leap():
         
         hdmi.sendframe(out_img)
         output_time = time.perf_counter()
+        
+        frame_count.value += 1
             
-        print(f'read time: {(frame_read_time - start)*1000:.2f}ms | '
+        print(  f'Frame {frame_count.value} | '
+                f'read time: {(frame_read_time - start)*1000:.2f}ms | '
                 f'prep time: {(prep_time - frame_read_time)*1000:.2f}ms | '
                 f'dpu time: {(dpu_time - prep_time)*1000:.2f}ms | '
                 f'post time: {(post_time - dpu_time)*1000:.2f}ms | '
@@ -207,25 +203,33 @@ class Leap():
             
             
     def run_seq(self):
-        self.stop_event = Event()
-        seq_proc = Process(target=Leap.seq_proc, args=(self.stop_event, self.hdmi, self.hist_eq, self.model, self.ie_enabled, self.dpu_enabled))
+        ''' Runs LEAP in sequential mode
+        
+        This spins off a separte process. The reason a seperate process is used is due to pynq hdmi will ignore keyboard interrupts
+        when in the __del__ function. Along with this, if pynq hdmi is interupted at the wrong time the Kernel will panic.
+        Running it in a separate process allows for gracefull shutdowns.
+        '''
+        
+        stop_event = Event()
+        frame_count = Value('i', 0)
+        
+        seq_proc = Process(target=Leap.seq_proc, args=(stop_event, self.hdmi, self.hist_eq, self.model, frame_count, self.ie_enabled, self.dpu_enabled))
         
         self.hdmi.start()
         self.hdmi.pipe_out(self.hist_eq.pipe_in) # connect hdmi input to hist_eq
         
+        seq_proc.start()
         
         try: 
-            start = time.perf_counter()
             while True:
-                if frame_count.value > 60:
-                    frame_count.value = 0
-                    start = time.perf_counter()
+                time.sleep(1)       # wait till interupted
 
-                time.sleep(1)
-                print(f'Average FPS: {frame_count.value/(time.perf_counter() - start):.2f}')
-                
         except KeyboardInterrupt:
             print('Stopping')
+            stop_event.set()
+            
+        seq_proc.join()
+            
             
     def run(self, method:str='mp'):
         if method == 'mp':
@@ -243,25 +247,42 @@ class Leap():
         else:
             raise ValueError('method must be "mp" or "seq"')
         
-    def eval(self, dataset:BaseDataset, results:BaseResults, use_hist_eq=True):
+    def eval(self, dataset:BaseDataset, results:BaseResults, use_hist_eq=True, save_img_dir=None):
         print('Starting Evaluation')
         total_imgs = len(dataset)
         self.hist_eq.reset(width=1920, height=1080)
         
+        save_img = False
+        if save_img_dir is not None:
+            if not os.path.exists(save_img_dir):
+                raise ValueError(f'{save_img_dir} does not exist')
+            save_img = True
+        
         for i, (img_id, img, img_shape) in enumerate(dataset):
+            if save_img:
+                cv.imwrite(os.path.join(save_img_dir, img_id, '_original.png'), cv.cvtColor(img, cv.COLOR_RGB2BGR))
+            
             if use_hist_eq:
                 img = cv.resize(img, (1920, 1080))
-                
                 img = self.hist_eq.process_img(img)
+                
                 # shape need to be the original for yolo to work
                 shape = img_shape[0:2]
                 shape = shape[::-1]
                 img = cv.resize(img, shape)
-                # cv.imwrite('397133_after_he.jpg', cv.cvtColor(img, cv.COLOR_RGB2BGR))
                 
-            raw_pred = self.model.forward(self.model.preprocess(img))
+                if save_img:
+                    cv.imwrite(os.path.join(save_img_dir, img_id, '_ie.png'), cv.cvtColor(img, cv.COLOR_RGB2BGR))
+                
+            prep_img = self.model.preprocess(img)
+            raw_pred = self.model.forward(prep_img)
             res = self.model.get_results(raw_pred)
             results.add(res, img_id)
+            
+            if save_img:
+                res = self.model.postprocess(raw_pred)
+                img = self.model.osd(img, res)
+                cv.imwrite(os.path.join(save_img_dir, img_id, '_pred.png'), cv.cvtColor(img, cv.COLOR_RGB2BGR))
             
             print(f'Processed {((i+1)/total_imgs)*100:.1f}%')
             
