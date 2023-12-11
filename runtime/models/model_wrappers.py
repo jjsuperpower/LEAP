@@ -1,6 +1,9 @@
 import pynq
+import pynq_dpu
 from pynq_dpu import DpuOverlay
 import numpy as np
+from copy import deepcopy
+import os
 
 import cv2 as cv
 
@@ -11,12 +14,39 @@ class BaseModel():
         self.overlay = overlay
         self.model_path = model_path
         
+        self.vart_conf_workaround()
+        
         self.overlay.load_model(self.model_path)
-        self.overlay.copy_xclbin()
+        # self.overlay.copy_xclbin()
         self.dpu = overlay.runner
        
         self.alloc_input_buffer()
         self.alloc_output_buffer()
+        
+        
+    def vart_conf_workaround(self):
+        ''' Workaround for bug in pynq-dpu
+        
+        The bug is documented here: https://github.com/Xilinx/DPU-PYNQ/issues/104
+        
+        This changes the check_vart_config function to write the path to the xclbin file with path of custom xclbin file.
+        If this is path is not set correctly the Kernel will pannic.
+        '''
+        
+        # deep copy may not be needed, but better safe than sorry
+        bit_file = deepcopy(self.overlay.bitfile_name)
+        basename = os.path.splitext(bit_file)[0]
+        xclbin_path = basename + '.xclbin'
+        
+        if not os.path.exists(xclbin_path):
+            raise FileNotFoundError(f'xclbin file not found at {xclbin_path}')
+        
+        def vart_config_set():
+            with open('/etc/vart.conf', 'w') as txt:
+                txt.write(f'firmware: {xclbin_path}')
+        
+        # overwrite check_vart_config function in another file (pynq_dpu.dpu)
+        pynq_dpu.dpu.check_vart_config = vart_config_set
         
     def alloc_input_buffer(self):
         self.input_size = tuple(self.dpu.get_input_tensors()[0].dims)
@@ -332,15 +362,19 @@ class YOLOv3(BaseModel):
         
 if __name__ == '__main__':
         
-    image = cv.imread('/home/xilinx/jupyter_notebooks/pynq-dpu/img/Cat.JPEG')
-    
-    # resize to a common video resolution
-    image = cv.resize(image, (1920, 1080))
-    # image = cv.resize(image, (416, 416))  
-    
-    overlay = DpuOverlay('overlays/leap_b4096_v5.bit')
+    def test_vart_conf_workaround():
+        overlay = DpuOverlay('overlays/leap_b4096_v5.bit')
+        model = Resnet50(overlay, 'models/dpu_resnet50.xmodel', 'datasets/imgnet_classes.txt')
+        
+        conf_file = '/etc/vart.conf'
+        with open(conf_file) as f:
+            print(f.read())
     
     def test_resnet50():
+        image = cv.imread('/home/xilinx/jupyter_notebooks/pynq-dpu/img/Cat.JPEG')
+        image = cv.resize(image, (1920, 1080))
+        overlay = DpuOverlay('overlays/leap_b4096_v5.bit')
+        
         model = Resnet50(overlay, '/home/xilinx/jupyter_notebooks/pynq-dpu/dpu_resnet50.xmodel', '/home/xilinx/jupyter_notebooks/leap/imgnet_classes.txt')
         
         preproc_image = model.preprocess(image)
@@ -352,6 +386,10 @@ if __name__ == '__main__':
         
         
     def test_yolov3():
+        image = cv.imread('/home/xilinx/jupyter_notebooks/pynq-dpu/img/Cat.JPEG')
+        image = cv.resize(image, (1920, 1080))
+        overlay = DpuOverlay('overlays/leap_b4096_v5.bit')
+        
         model = YOLOv3(overlay, '/home/xilinx/jupyter_notebooks/pynq-dpu/tf_yolov3_voc.xmodel', '/home/xilinx/jupyter_notebooks/leap/voc_classes.txt')
         
         preproc_image = model.preprocess(image)
@@ -367,5 +405,6 @@ if __name__ == '__main__':
         #save image
         cv.imwrite('/home/xilinx/jupyter_notebooks/yolo_out.png', mod_img)
 
-    test_yolov3()
+    test_vart_conf_workaround()
+    # test_yolov3()
     # test_resnet50()
