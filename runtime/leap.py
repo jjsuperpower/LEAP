@@ -9,7 +9,7 @@ import queue
 import signal
 import cv2 as cv
 import os
-from copy import deepcopy
+# from copy import deepcopy
 
 # from models import Resnet50, YOLOv3, BaseModel
 from hdmi import HDMI
@@ -283,7 +283,7 @@ class Leap():
         
         images must have the .jpg, .jpeg, or .png extension
         '''
-        print('Starting Comparison')
+        print('Generating Images for Comparison')
         if not os.path.exists(save_img_dir):
             raise ValueError(f'{save_img_dir} does not exist')
         
@@ -297,29 +297,34 @@ class Leap():
         for i, filename in enumerate(images):
             if not filename.endswith('.jpg') and not filename.endswith('.jpeg') and not filename.endswith('.png'):
                 continue
+            
             basename = os.path.splitext(filename)[0]
             img = cv.imread(os.path.join(image_dir, filename))
+            img = cv.cvtColor(img, cv.COLOR_BGR2RGB)
+            
             if transform is not None:
-                img_trsfm = transform(img)
-                cv.imwrite(os.path.join(save_img_dir, basename + '_trsfm.png'), cv.cvtColor(img_trsfm, cv.COLOR_RGB2BGR))
+                img_trsfm = transform(img.copy())
+                cv.imwrite(os.path.join(save_img_dir, basename + '_trsfm.png'), cv.cvtColor(img_trsfm.copy(), cv.COLOR_RGB2BGR))
             
             img_shape = img_trsfm.shape
-            img_ie = self.hist_eq.process_img(cv.resize(deepcopy(img_trsfm), (1920, 1080)))
+            img_ie = self.hist_eq.process_img(cv.resize(img_trsfm.copy(), (1920, 1080)))        # the reson for all the .copy is cv.ctColor modifies the image in place
             
             # shape need to be the original for yolo to work
             shape = img_shape[0:2]
             shape = shape[::-1]
             img_ie = cv.resize(img_ie, shape)
 
-            cv.imwrite(os.path.join(save_img_dir, basename + '_ie.png'), cv.cvtColor(img, cv.COLOR_RGB2BGR))
+            cv.imwrite(os.path.join(save_img_dir, basename + '_ie.png'), cv.cvtColor(img_ie.copy(), cv.COLOR_RGB2BGR))
             
-            img_pred = self.model.osd(img, self.model.predict(img))
-            img_trsfm_pred = self.model.osd(img_trsfm, self.model.predict(img_trsfm))
-            img_ie_pred = self.model.osd(img_ie, self.model.predict(img_ie))
+            # some models need bgr and some need rgb, to be efficient they will modify the image in place
+            # so we need to make a copy
+            img_pred = self.model.osd(img, self.model.predict(img.copy()))
+            img_trsfm_pred = self.model.osd(img_trsfm, self.model.predict(img_trsfm.copy()))
+            img_ie_pred = self.model.osd(img_ie, self.model.predict(img_ie.copy()))
             
-            cv.imwrite(os.path.join(save_img_dir, basename + '_pred.png'), cv.cvtColor(img_pred, cv.COLOR_RGB2BGR))
-            cv.imwrite(os.path.join(save_img_dir, basename + '_trsfm_pred.png'), cv.cvtColor(img_trsfm_pred, cv.COLOR_RGB2BGR))
-            cv.imwrite(os.path.join(save_img_dir, basename + '_ie_pred.png'), cv.cvtColor(img_ie_pred, cv.COLOR_RGB2BGR))
+            cv.imwrite(os.path.join(save_img_dir, basename + '_pred.png'), cv.cvtColor(img_pred.copy(), cv.COLOR_RGB2BGR))
+            cv.imwrite(os.path.join(save_img_dir, basename + '_trsfm_pred.png'), cv.cvtColor(img_trsfm_pred.copy(), cv.COLOR_RGB2BGR))
+            cv.imwrite(os.path.join(save_img_dir, basename + '_ie_pred.png'), cv.cvtColor(img_ie_pred.copy(), cv.COLOR_RGB2BGR))
             
             print(f'Processed {((i+1)/len(images))*100:.1f}%')
             
