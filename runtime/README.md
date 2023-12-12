@@ -2,6 +2,26 @@
 This contains the code needed to inference a model on the ZCU104 board with image enhancement.
 > Note: the only image enhancement tested was histogram equalization, for this project image enhancement and histogram equalization are used interchangeably.
 
+## Command Line Options
+There are three main command line options:
+- `--evaluate`: This will run the model on the validation split of the dataset and output the accuracy and save the raw predictions to `results/some_name.json`. The accuracy can be calculated using the `eval.py`.
+- `--predict`: This will run the model on the images in the given directory and save additional images for visual comparison.
+- Not specifing the `evaluate` or `predict` option will run the model on the HDMI input and output the results to the HDMI output in real-time.
+
+The rest of the listed commands may apply to one or more of the above options.
+- `--model`: The model to inference.
+- `--method`: How processing should be done, either sequential or in parallel (multiprocessing).
+- `--overlay`: The overlay to use. This should be the name of the overlay file without the extension.
+- `--class_file`: The file containing the class names. This can be left default for ImageNet and COCO.
+- `--frame_size` The size of the HDMI input source. Best to leave this default.
+- `--fps`: The frames per second to run the model at. Best to leave this default.
+- `--max_queue_size`: Only applies when running LEAP in multiprocessing mode. This determins how many frames are buffered at each step of the pipeline.
+- `--save_dir`: The directory to save the results to when running the evaluation.
+- `--disable_dpu`: Disables the DPU for real-time HDMI in/out.
+- `--disable_ie`: Disables image enhancement for real-time HDMI in/out.
+
+
+
 ## Getting Started
 > Note: These instructions you are using Ubuntu for your host machine. If your not using some flavor Linux - Good Luck your on your own.
 
@@ -78,3 +98,29 @@ pip3 install -r requirements.txt
     python3 main.py --model yolov3
 ```
 
+16. (Optional) Add datasets to `datasets/` directory. The code was tested with [ImageNet](http://www.image-net.org/) and [COCO](https://cocodataset.org/#home). These should each be put in individual folders, `datasets/imagenet/` and `datasets/coco/` respectively. Other types of datasets will require modifications to this project.
+> Only the validation splits of the datasets are needed for the --evaluate option. The training splits are not needed.
+
+
+### Included Files
+```
+📦runtime            -- LEAP runtime code
+ ┣ 📂datasets               -- Where datasets are stored
+ ┃ ┣ 📜README.md
+ ┃ ┣ 📜base.py              -- Contains dataset abstract class
+ ┃ ┣ 📜coco_ds.py           -- COCO dataset wrapper
+ ┃ ┣ 📜imgnet_ds.py         -- ImageNet dataset wrapper
+ ┣ 📂models
+ ┃ ┣ 📜README.md
+ ┃ ┣ 📜model_wrappers.py    -- Contains wrapper for models that include preprocessing, 
+ ┃ ┃                           postprocessing, and on-screen display (OSD)
+ ┣ 📂overlays               -- Where FPGA images are stored
+ ┣ 📂results                -- Default directory for saving raw results
+ ┣ 📜README.md              -- This file
+ ┣ 📜eval.py                -- Calculates from raw results
+ ┣ 📜hdmi.py                -- HDMI API
+ ┣ 📜hist_eq.py             -- API for histogram equalization (image enhancement)
+ ┣ 📜leap.py                -- LEAP API
+ ┣ 📜main.py                -- Command line parsing
+ ┗ 📜requirements.txt       -- Required dependencies
+ ```
