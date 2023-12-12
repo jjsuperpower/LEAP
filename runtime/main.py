@@ -101,7 +101,7 @@ if __name__ == '__main__':
         parser.add_argument('--fps', type=int, default=60, help='Frame rate, do not changes unless you know what you are doing')
         parser.add_argument('--max_queue_size', type=int, default=4, help='Maximum queue size for multiprocessing')
         parser.add_argument('--save_dir', type=str, default='/home/xilinx/jupyter_notebooks/leap/results/', help='Directory to save results for benchmarking')
-        parser.add_argument('--benchmark', action='store_true', help='Runs benchmark instead of live demo')
+        parser.add_argument('--evaluation', action='store_true', help='Runs evaluation instead of live demo')
         parser.add_argument('--predict', type=str, default=None, help='Directory to predict images and save results')
         parser.add_argument('--disable_dpu', action='store_true', help='Disables DPU and will not run model')
         parser.add_argument('--disable_ie', action='store_true', help='Disables image enhancement')
@@ -120,7 +120,7 @@ if __name__ == '__main__':
     if args.disable_ie:
         leap.disable_ie()
     
-    if args.benchmark:
+    if args.evaluation:
         if args.model == 'resnet50':
             benchmark_resnet50(leap, args.save_dir)
         elif args.model == 'yolov3':
