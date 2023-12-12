@@ -82,7 +82,8 @@ def benchmark_yolov3(leap: Leap, save_dir='results/'):
     results.save(os.path.join(save_dir, 'yolov3_dark.json'))
 
 
-
+def predict(leap: Leap, img_dir):
+    leap.compare(img_dir, img_dir, transform=transform)
 
 
 if __name__ == '__main__':
@@ -101,6 +102,7 @@ if __name__ == '__main__':
         parser.add_argument('--max_queue_size', type=int, default=4, help='Maximum queue size for multiprocessing')
         parser.add_argument('--save_dir', type=str, default='/home/xilinx/jupyter_notebooks/leap/results/', help='Directory to save results for benchmarking')
         parser.add_argument('--benchmark', action='store_true', help='Runs benchmark instead of live demo')
+        parser.add_argument('--predict', type=str, default=None, help='Directory to predict images and save results')
         parser.add_argument('--disable_dpu', action='store_true', help='Disables DPU and will not run model')
         parser.add_argument('--disable_ie', action='store_true', help='Disables image enhancement')
         return parser.parse_args()
@@ -123,5 +125,7 @@ if __name__ == '__main__':
             benchmark_resnet50(leap, args.save_dir)
         elif args.model == 'yolov3':
             benchmark_yolov3(leap, args.save_dir)
+    elif args.predict:
+        predict(leap, args.predict)
     else:
         leap.run(args.method)

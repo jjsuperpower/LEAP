@@ -9,6 +9,7 @@ import queue
 import signal
 import cv2 as cv
 import os
+from copy import deepcopy
 
 # from models import Resnet50, YOLOv3, BaseModel
 from hdmi import HDMI
@@ -247,21 +248,12 @@ class Leap():
         else:
             raise ValueError('method must be "mp" or "seq"')
         
-    def eval(self, dataset:BaseDataset, results:BaseResults, use_hist_eq=True, save_img_dir=None):
+    def eval(self, dataset:BaseDataset, results:BaseResults, use_hist_eq=True):
         print('Starting Evaluation')
         total_imgs = len(dataset)
         self.hist_eq.reset(width=1920, height=1080)
         
-        save_img = False
-        if save_img_dir is not None:
-            if not os.path.exists(save_img_dir):
-                raise ValueError(f'{save_img_dir} does not exist')
-            save_img = True
-        
         for i, (img_id, img, img_shape) in enumerate(dataset):
-            if save_img:
-                cv.imwrite(os.path.join(save_img_dir, img_id, '_original.png'), cv.cvtColor(img, cv.COLOR_RGB2BGR))
-            
             if use_hist_eq:
                 img = cv.resize(img, (1920, 1080))
                 img = self.hist_eq.process_img(img)
@@ -271,21 +263,67 @@ class Leap():
                 shape = shape[::-1]
                 img = cv.resize(img, shape)
                 
-                if save_img:
-                    cv.imwrite(os.path.join(save_img_dir, img_id, '_ie.png'), cv.cvtColor(img, cv.COLOR_RGB2BGR))
-                
             prep_img = self.model.preprocess(img)
             raw_pred = self.model.forward(prep_img)
             res = self.model.get_results(raw_pred)
             results.add(res, img_id)
             
-            if save_img:
-                res = self.model.postprocess(raw_pred)
-                img = self.model.osd(img, res)
-                cv.imwrite(os.path.join(save_img_dir, img_id, '_pred.png'), cv.cvtColor(img, cv.COLOR_RGB2BGR))
-            
             print(f'Processed {((i+1)/total_imgs)*100:.1f}%')
             
         self.shutdown()
+        
+    def compare(self, image_dir:str, save_img_dir, transform=None):
+        ''' Save images for visual comparison and evaluation
+        Saves images to save_img_dir in the following format:
+            {save_img_dir}/<img_name>_trsfm.png   -- transformed images
+            {save_img_dir}/<img_name>_ie.png      -- enhanced images
+            {save_img_dir}/<img_name>_orig_pred.png     -- prediction of original image
+            {save_img_dir}/<img_name>_trsfm_pred.png    -- prediction of transformed image
+            {save_img_dir}/<img_name>_ie_pred.png       -- prediction of transformed + enhanced image
+        
+        images must have the .jpg, .jpeg, or .png extension
+        '''
+        print('Starting Comparison')
+        if not os.path.exists(save_img_dir):
+            raise ValueError(f'{save_img_dir} does not exist')
+        
+        if not os.path.exists(image_dir):
+            raise ValueError(f'{image_dir} directory does not exist')
+        
+        images = os.listdir(image_dir)
+        
+        self.hist_eq.reset(width=1920, height=1080)
+        
+        for i, filename in enumerate(images):
+            if not filename.endswith('.jpg') and not filename.endswith('.jpeg') and not filename.endswith('.png'):
+                continue
+            basename = os.path.splitext(filename)[0]
+            img = cv.imread(os.path.join(image_dir, filename))
+            if transform is not None:
+                img_trsfm = transform(img)
+                cv.imwrite(os.path.join(save_img_dir, basename + '_trsfm.png'), cv.cvtColor(img_trsfm, cv.COLOR_RGB2BGR))
+            
+            img_shape = img_trsfm.shape
+            img_ie = self.hist_eq.process_img(cv.resize(deepcopy(img_trsfm), (1920, 1080)))
+            
+            # shape need to be the original for yolo to work
+            shape = img_shape[0:2]
+            shape = shape[::-1]
+            img_ie = cv.resize(img_ie, shape)
+
+            cv.imwrite(os.path.join(save_img_dir, basename + '_ie.png'), cv.cvtColor(img, cv.COLOR_RGB2BGR))
+            
+            img_pred = self.model.osd(img, self.model.predict(img))
+            img_trsfm_pred = self.model.osd(img_trsfm, self.model.predict(img_trsfm))
+            img_ie_pred = self.model.osd(img_ie, self.model.predict(img_ie))
+            
+            cv.imwrite(os.path.join(save_img_dir, basename + '_pred.png'), cv.cvtColor(img_pred, cv.COLOR_RGB2BGR))
+            cv.imwrite(os.path.join(save_img_dir, basename + '_trsfm_pred.png'), cv.cvtColor(img_trsfm_pred, cv.COLOR_RGB2BGR))
+            cv.imwrite(os.path.join(save_img_dir, basename + '_ie_pred.png'), cv.cvtColor(img_ie_pred, cv.COLOR_RGB2BGR))
+            
+            print(f'Processed {((i+1)/len(images))*100:.1f}%')
+            
+        self.shutdown()
+           
 
         
