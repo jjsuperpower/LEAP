@@ -66,7 +66,7 @@ class BaseModel():
     def predict(self, img):
         img = self.preprocess(img)
         output_data = self.forward(img)
-        classes = self.calc_result(output_data)
+        classes = self.postprocess(output_data)
         return classes 
     
     # more stable and reliable
