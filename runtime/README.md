@@ -89,7 +89,7 @@ pip3 install -r requirements.txt
     You should see several images to added to the `testing/` directory. The `cat.jpg` image is the original image, `cat_trfm.png` is the image after it has been darkened, `cat_ie.png` is after image enhancement (histogram equalization) is applied to the darkened image.
 ```bash
     mkdir testing
-    wget https://en.wikipedia.org/wiki/File:Cat_August_2010-4.jpg -P testing/ -O testing/cat.jpg
+    wget https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/Cat_August_2010-4.jpg/1200px-Cat_August_2010-4.jpg -P testing/ -O testing/cat.jpg
     python3 main.py --model resnet50 --predict testing/
 ```
 - Test on HDMI in/out:
