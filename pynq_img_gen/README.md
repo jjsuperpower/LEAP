@@ -38,4 +38,4 @@ reserved-memory {
 };
 ```
 
-In order to aid the process of compiling PYNQ v3.0.0 we provide a docker image with documentation [here](https://hub.docker.com/r/jjsuperpower/pynq-sdbuild-env) that simplifies the host setup process.
+In order to aid the process of compiling PYNQ v3.0.1 we provide a docker image with documentation [here](https://hub.docker.com/r/jjsuperpower/pynq-sdbuild-env) that simplifies the host setup process.
