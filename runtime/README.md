@@ -25,7 +25,7 @@ The rest of the listed commands may apply to one or more of the above options.
 ## Getting Started
 > Note: These instructions you are using Ubuntu for your host machine. If your not using some flavor Linux - Good Luck your on your own.
 
-1. Please download the custom PYNQ image from [here](https://drive.google.com/file/d/1Q4Q4Z3Z3Z3Z3Z3Z3Z3Z3Z3Z3Z3Z3Z3Z/view?usp=sharing) and flash it to an SD card. This custom image has the CMA expanded to 1GB instead of 512MB.
+1. Please download the custom PYNQ image from [here](https://drive.google.com/drive/folders/1VUy-5wqd8tlGAH6ulIvdwKcekvRp0IiV?usp=sharing) and flash it to an SD card. This custom image has the CMA expanded to 1GB instead of 512MB.
 
 2. Boot up the ZCU104 and connect to it via USB JTAG port. Download and install `minicom` via running `apt install minicom`. Then run `sudo minicom -D /dev/ttyUSB1` to connect to the ZCU104. You may need to press enter to pull up a login screen.
 > Note: You can connect to the ZCU104 via minicom even when the main power is off. This is useful for debugging the boot process.
@@ -33,7 +33,7 @@ The rest of the listed commands may apply to one or more of the above options.
 3. Log in with the username `xilinx` and password `xilinx`. Then run the following command to login as root: `sudo su`. All the runtime code relies on being run as root, as it needs to directly access the hardware. SSH does not allow for logging in as root as configured but can by changed by running a command and changing a config file. To do this run the following commands as root:
 ```bash
 passwd
-sed -i 's/PermitRootLogin prohibit-password/PermitRootLogin yes/g' /etc/ssh/sshd_config
+sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/g' /etc/ssh/sshd_config
 systemctl restart sshd
 ```
 
