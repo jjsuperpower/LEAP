@@ -86,16 +86,16 @@ pip3 install -r requirements.txt
 
 15. 
 - Test on an image (file):
-    You should see several images to added to the `testing/` directory. The `cat.jpg` image is the original image, `cat_trfm.png` is the image after it has been darkened, `cat_ie.png` is after image enhancement (histogram equalization) is applied to the darkened image.
+    You should see several images to added to the `testing/` directory. The `000000397133.jpg` image is the original image, `000000397133_trfm.png` is the image after it has been darkened, `000000397133_ie.png` is after image enhancement (histogram equalization) is applied to the darkened image.
 ```bash
-    mkdir testing
-    wget https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/Cat_August_2010-4.jpg/1200px-Cat_August_2010-4.jpg -P testing/ -O testing/cat.jpg
-    python3 main.py --model resnet50 --predict testing/
+mkdir testing
+cp ../doc/imgs/000000397133.jpg testing/
+python3 main.py --model yolov3 --predict testing/
 ```
 - Test on HDMI in/out:
     Connect the the ZCU104 bottom HDMI port to a video source and The top HDMI port to a monitor. Then run the following command:
 ```bash
-    python3 main.py --model yolov3
+python3 main.py --model resnet50
 ```
 
 16. (Optional) Add datasets to `datasets/` directory. The code was tested with [ImageNet](http://www.image-net.org/) and [COCO](https://cocodataset.org/#home). These should each be put in individual folders, `datasets/imagenet/` and `datasets/coco/` respectively. Other types of datasets will require modifications to this project.
