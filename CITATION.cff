@@ -6,7 +6,7 @@ authors:
 - family-names: "Hasan"
   given-names: "Syed"
 title: "LEAP"
-version: 1.0.1
+version: 1.0.0
 doi: 
 date-released: 2023-12-18
 url: "https://github.com/jjsuperpower/LEAP"
